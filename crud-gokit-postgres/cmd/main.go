@@ -27,7 +27,7 @@ func main() {
     httpHandler := httptransport.NewHTTPHandler(endpoints)
 
     // Define server parameters
-    addr := "0.0.0.0:8088" // specify the port you want to listen on
+    addr := "0.0.0.0:8080" // specify the port you want to listen on
 
     // Start HTTP server
     log.Printf("Starting server on %s", addr)
