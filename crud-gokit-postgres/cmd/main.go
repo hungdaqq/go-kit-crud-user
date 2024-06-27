@@ -1,38 +1,46 @@
 package main
 
 import (
-    "log"
-    "net/http"
+	"log"
+	"net/http"
 
-    _ "github.com/lib/pq"
+	"crud-gokit-postgres/internal/endpoint"
+	"crud-gokit-postgres/internal/proto"
+	httptransport "crud-gokit-postgres/internal/transport/http"
 
-    "crud-gokit-postgres/internal/db"
-    "crud-gokit-postgres/internal/endpoint"
-    "crud-gokit-postgres/internal/service"
-    httptransport "crud-gokit-postgres/internal/transport"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
-    // Initialize database connection
-    db.InitDB("postgres://postgres:1@localhost/postgres?sslmode=disable")
-    defer db.GetDB().Close()
+	// Authentication details
+	authUser := "IOT"
+	authPassword := "1"
+	authRealm := "ProtectedArea"
 
-    // Create service
-    userService := service.NewUserService(db.GetDB())
+	// gRPC connection setup
+	grpcAddr := "localhost:50051" // Address of the gRPC UserService server
+	conn, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Failed to connect to gRPC server: %v", err)
+	}
+	defer conn.Close()
 
-    // Create endpoints
-    endpoints := endpoint.MakeEndpoints(userService)
+	// Create gRPC client
+	userServiceClient := proto.NewUserServiceClient(conn)
 
-    // Create HTTP handler
-    httpHandler := httptransport.NewHTTPHandler(endpoints)
+	// Create endpoints with authentication middleware
+	endpoints := endpoint.MakeEndpoints(userServiceClient, authUser, authPassword, authRealm)
 
-    // Define server parameters
-    addr := "0.0.0.0:8080" // specify the port you want to listen on
+	// Create HTTP handler
+	httpHandler := httptransport.NewHTTPHandler(endpoints)
 
-    // Start HTTP server
-    log.Printf("Starting server on %s", addr)
-    err := http.ListenAndServe(addr, httpHandler)
-    if err != nil {
-        log.Fatalf("Failed to start server: %v", err)
-    }
+	// Define server parameters
+	addr := ":8080" // specify the port you want to listen on
+
+	// Start HTTP server
+	log.Printf("Starting server on %s", addr)
+	if err := http.ListenAndServe(addr, httpHandler); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }
