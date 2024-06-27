@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+option go_package = "./proto";
+
+service UserService {
+    rpc CreateUser(UserRequest) returns (UserResponse);
+    rpc GetUser(UserID) returns (UserResponse);
+    rpc UpdateUser(User) returns (UserResponse);
+    rpc DeleteUser(UserID) returns (UserResponse);
+}
+
+message User {
+    int64 id = 1;
+    string name = 2;
+    string email = 3;
+    string password = 4;
+}
+
+message UserRequest {
+    string name = 1;
+    string email = 2;
+    string password = 3;
+}
+
+message UserID {
+    int64 id = 1;
+}
+
+message UserResponse {
+    User user = 1;
+    string error_message = 2;
+}
