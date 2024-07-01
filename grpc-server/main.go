@@ -10,6 +10,11 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"google.golang.org/grpc"
 )
 
@@ -34,6 +39,9 @@ type server struct {
 }
 
 func (s *server) CreateUser(ctx context.Context, req *pb.UserRequest) (*pb.UserResponse, error) {
+	tr := otel.Tracer("grpc-server")
+	ctx, span := tr.Start(ctx, "CreateUser")
+	defer span.End()
 	user := &User{
 		Name:     req.Name,
 		Email:    req.Email,
@@ -56,6 +64,9 @@ func (s *server) CreateUser(ctx context.Context, req *pb.UserRequest) (*pb.UserR
 }
 
 func (s *server) GetUser(ctx context.Context, req *pb.UserID) (*pb.UserResponse, error) {
+	tr := otel.Tracer("grpc-server")
+	ctx, span := tr.Start(ctx, "GetUser")
+	defer span.End()
 	var user User
 	err := db.GetContext(ctx, &user, "SELECT id, name, email, password FROM users WHERE id=$1", req.Id)
 	if err != nil {
@@ -71,6 +82,9 @@ func (s *server) GetUser(ctx context.Context, req *pb.UserID) (*pb.UserResponse,
 }
 
 func (s *server) UpdateUser(ctx context.Context, req *pb.User) (*pb.UserResponse, error) {
+	tr := otel.Tracer("grpc-server")
+	ctx, span := tr.Start(ctx, "UpdateUser")
+	defer span.End()
 	user := &User{
 		Id:       req.Id,
 		Name:     req.Name,
@@ -93,7 +107,9 @@ func (s *server) UpdateUser(ctx context.Context, req *pb.User) (*pb.UserResponse
 }
 
 func (s *server) DeleteUser(ctx context.Context, req *pb.UserID) (*pb.UserResponse, error) {
-
+	tr := otel.Tracer("grpc-server")
+	ctx, span := tr.Start(ctx, "DeleteUser")
+	defer span.End()
 	_, err := db.ExecContext(ctx, "DELETE FROM users WHERE id=$1", req.Id)
 	if err != nil {
 		return nil, err
@@ -103,6 +119,7 @@ func (s *server) DeleteUser(ctx context.Context, req *pb.UserID) (*pb.UserRespon
 }
 
 func main() {
+	initTracer()
 	// Connect to PostgreSQL database
 	var err error
 	db, err = sqlx.Connect(driverName, dataSourceName)
@@ -123,4 +140,25 @@ func main() {
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
 	}
+}
+
+func initTracer() {
+	exporter, err := otlptracegrpc.New(context.Background(),
+		otlptracegrpc.WithInsecure(),
+		otlptracegrpc.WithEndpoint("0.0.0.0:4317"))
+	if err != nil {
+		log.Fatalf("Failed to create exporter: %v", err)
+	}
+
+	// Create a new tracer provider with a batch span processor and the otlp exporter
+	tp := trace.NewTracerProvider(
+		trace.WithBatcher(exporter),
+		trace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String("hungdq31"),
+		)),
+	)
+
+	// Set the global tracer provider
+	otel.SetTracerProvider(tp)
 }

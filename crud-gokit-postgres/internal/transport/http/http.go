@@ -11,6 +11,9 @@ import (
 	"github.com/go-kit/kit/endpoint"
 	httptransport "github.com/go-kit/kit/transport/http"
 	"github.com/gorilla/mux"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // NewHTTPHandler creates a new HTTP handler for the endpoints.
@@ -27,6 +30,8 @@ func NewHTTPHandler(endpoints myEndpoint.Endpoints) http.Handler {
 
 // httpHandler wraps a Go-Kit endpoint with the necessary HTTP decoding and encoding.
 func httpHandler(e endpoint.Endpoint, decodeRequest func(r *http.Request) (interface{}, error)) http.Handler {
+	tracer := otel.Tracer("crud-gokit-postgres")
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Extract token from Authorization header
 		authHeader := r.Header.Get("Authorization")
@@ -45,6 +50,8 @@ func httpHandler(e endpoint.Endpoint, decodeRequest func(r *http.Request) (inter
 
 		// Create a new context with the token
 		ctx := context.WithValue(r.Context(), httptransport.ContextKeyRequestAuthorization, authToken)
+		ctx, span := tracer.Start(ctx, r.URL.Path)
+		defer span.End()
 
 		request, err := decodeRequest(r)
 		if err != nil {
@@ -55,6 +62,9 @@ func httpHandler(e endpoint.Endpoint, decodeRequest func(r *http.Request) (inter
 		response, err := e(ctx, request)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			// Record the status in the span
+			span.SetStatus(codes.Error, err.Error())
+			span.SetAttributes(attribute.Int("http.status_code", http.StatusInternalServerError))
 			return
 		}
 

@@ -39,7 +39,9 @@ func MakeEndpoints(client proto.UserServiceClient, authUser, authPassword, authR
 }
 
 func makeCreateUserEndpoint(client proto.UserServiceClient) endpoint.Endpoint {
+
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
+
 		req := request.(CreateUserRequest)
 		grpcReq := &proto.UserRequest{
 			Name:     req.Name,
@@ -55,6 +57,7 @@ func makeCreateUserEndpoint(client proto.UserServiceClient) endpoint.Endpoint {
 }
 
 func makeGetUserEndpoint(client proto.UserServiceClient) endpoint.Endpoint {
+
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
 		req := request.(GetUserRequest)
 		grpcReq := &proto.UserID{
